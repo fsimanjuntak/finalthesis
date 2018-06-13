@@ -57,7 +57,7 @@
 % - resizeWidth: If resizeWidth is set NaN then the face images are not resized, otherwise they are resized to
 %   [resizeWidth, resizeWidth].
 %
-function [data,datacnn,datacnncosfire] = Gender_recognition_with_CNN_and_COSFIRE_Stacking(noperatorspergender, dataFolder, doFaceDetection, resizeWidth, classifierType)
+function [data,datacnn,datacnncosfire] = Gender_recognition_with_CNN_and_COSFIRE_Stacking(noperatorspergender, dataFolder, doFaceDetection, resizeWidth, classifierType, applysurf)
 %Initialize outputs
 data = [];
 datacnn = [];
@@ -69,6 +69,7 @@ addpath('../Gabor/');
 addpath('../Gender_recognition/');
 addpath('../libsvm_3_21/matlab/');
 addpath('../CNN/');
+addpath('../SURF/');
 
 % Configure the image paths. If you want to organize your folder in a
 % different way, please modify these lines.
@@ -83,6 +84,9 @@ dirlist.testingfemaledir    = strcat(dirlist.femaledir,filesep,'test_set');
 % be saved in this folder.
 outdir = [dataFolder,sprintf('/results/noperatorspergender=%d',noperatorspergender)];
 CNNdir = strcat(dataFolder,'results/cnnfeatures');
+SURFdir = strcat(dataFolder,'results/surffeatures');
+genderlabels = categorical({'1','2'});
+
 if ~exist(outdir)
     mkdir(outdir);
 end
@@ -115,12 +119,23 @@ data.testing.labels = [ones(1,size(dataset.testing.males,3)),ones(1,size(dataset
 % Normalize training and test data
 data = normalizeData(data,numel(operatorlist));
 
-% Extract features with CNN
+% Evaluate model using SVM chisquared
+% % Training classification SVM models with Chi-Squared Kernel
+% [model.pyramid, kernel.training, data.training.svmscore] = trainCOSFIREPyramidModelStack(outdir,data,numel(operatorlist));
+% 
+% %Evaluate test data with SVM models
+% [result.info, kernel.testing, data.testing.svmscore] = testCOSFIREPyramidModelStack(outdir,data,numel(operatorlist),model.pyramid);
+% fprintf('Recognition Rate COSFIRE: %2.6f\n',result.info.CorrectRate);
+
+% Extract CNN Scores
 [CNNaccuracy,datacnn,CNNsvmtrainingscore,CNNsvmtestingscore] = extractCNNFeatures(dirlist,CNNdir,numel(operatorlist), data);
 fprintf('Recognition Rate CNN: %2.6f\n',CNNaccuracy);
 
-genderlabels = categorical({'1','2'});
-% Evaluate test data with SVM models
+% Extract SURF Scores
+[SURFaccuracy,datasurf,SURFTrainingScore,SURFTestingScore] = extractSURFFeatures(SURFdir,data);
+ 
+% Extract COSFIRE scores
+% Classifier 1 = SVM Chisquare, Classifier 2 = SVM ECOC
 if (classifierType == 1)
     % Training classification SVM models with Chi-Squared Kernel
     [model.pyramid, kernel.training, COSFIREsvmtrainingscore] = trainCOSFIREPyramidModelStack(outdir,data,numel(operatorlist));
@@ -128,15 +143,7 @@ if (classifierType == 1)
     fprintf('Recognition Rate COSFIRE: %2.6f\n',result.info.CorrectRate);
     
 elseif (classifierType == 2)
-%     t = templateSVM();
-%     SVMCOSFIREClassifier = fitcecoc(data.training.desc,datacnn.training.labels,...
-%     'Learners',t,'FitPosterior',1,...
-%     'ClassNames',genderlabels);
-%     [~,~,~,COSFIREsvmtrainingscore] = predict(SVMCOSFIREClassifier,data.training.desc);
-%     [COSFIREpredictedLabelsTesting,~,~,COSFIREsvmtestingscore] = predict(SVMCOSFIREClassifier,data.testing.desc);
-%     accuracyCOSFIRE = mean(COSFIREpredictedLabelsTesting == datacnn.testing.labels);
-%     fprintf('Recognition Rate COSFIRE: %2.6f\n',accuracyCOSFIRE);
-    
+    % Extract COSFIRE Scores
     SVMCOSFIREClassifier = fitcecoc(data.training.desc,datacnn.training.labels);
     [~,COSFIREsvmtrainingscore] = predict(SVMCOSFIREClassifier,data.training.desc);
     [COSFIREpredictedLabelsTesting,COSFIREsvmtestingscore] = predict(SVMCOSFIREClassifier,data.testing.desc);
@@ -144,44 +151,21 @@ elseif (classifierType == 2)
     fprintf('Recognition Rate COSFIRE: %2.6f\n',accuracyCOSFIRE);
 end
 
-% % Get training score SVM
-% for i=1:numel(datacnn.training.labels)
-%     correctlabel =  datacnn.training.labels(i,1);
-%     if (correctlabel == genderlabels(1))
-%         idx = 2;
-%     else
-%         idx = 1 ;
-%     end
-%     
-%     CNNsvmtrainingscore(i,3) = CNNsvmtrainingscore(i,idx);
-%     if (classifierType == 2)
-%         COSFIREsvmtrainingscore(i,3) = COSFIREsvmtrainingscore(i,idx);
-%     end
-% end
-% 
-% 
-% % Get testing score SVM
-% for i=1:numel(datacnn.testing.labels)
-%     correctlabel =  datacnn.testing.labels(i,1);
-%     if (correctlabel == genderlabels(1))
-%         idx = 2;
-%     else
-%         idx = 1 ;
-%     end
-%     
-%     CNNsvmtestingscore(i,3) = CNNsvmtestingscore(i,idx);
-%     if (classifierType == 2)
-%         COSFIREsvmtestingscore(i,3) = COSFIREsvmtestingscore(i,idx); 
-%     end
-% end
-% 
+
+
 % Merge features CNN and COSFIRE
 if (classifierType == 1)
     datacnncosfire.training.features = [COSFIREsvmtrainingscore CNNsvmtrainingscore(:,3)];
     datacnncosfire.testing.features = [COSFIREsvmtestingscore CNNsvmtestingscore(:,3)];
 else
-    datacnncosfire.training.features = [COSFIREsvmtrainingscore CNNsvmtrainingscore];
-    datacnncosfire.testing.features = [COSFIREsvmtestingscore CNNsvmtestingscore];
+    if (applysurf == 1)
+        datacnncosfire.training.features = [COSFIREsvmtrainingscore SURFTrainingScore CNNsvmtrainingscore];
+        datacnncosfire.testing.features = [COSFIREsvmtestingscore SURFTestingScore CNNsvmtestingscore];
+    else
+        datacnncosfire.training.features = [COSFIREsvmtrainingscore CNNsvmtrainingscore];
+        datacnncosfire.testing.features = [COSFIREsvmtestingscore CNNsvmtestingscore];
+    end
+    
 end
 
 datacnncosfire.training.labels = datacnn.training.labels;
@@ -191,13 +175,9 @@ datacnncosfire.testing.labels = datacnn.testing.labels;
 SVMCNNCOSFIREClassifier = fitcecoc(datacnncosfire.training.features,datacnn.training.labels);
 CNNCOSFIREpredictedLabelsTesting = predict(SVMCNNCOSFIREClassifier,datacnncosfire.testing.features);
 accuracyCNNCOSFIRE = mean(CNNCOSFIREpredictedLabelsTesting == datacnncosfire.testing.labels);
-fprintf('Recognition Rate CNN+COSFIRE: %2.6f\n',accuracyCNNCOSFIRE);
 
-% t = templateSVM();
-% SVMCNNCOSFIREClassifier = fitcecoc(datacnncosfire.training.features,datacnn.training.labels,...
-%                         'Learners',t,'FitPosterior',1,...
-%                         'ClassNames',genderlabels);
-% [~,~,~,CNNCOSFIREsvmscoretraining] = predict(SVMCNNCOSFIREClassifier,datacnncosfire.training.features);
-% [CNNCOSFIREpredictedLabelsTesting,~,~,CNNCOSFIREsvmscoretesting] = predict(SVMCNNCOSFIREClassifier,datacnncosfire.testing.features);
-% accuracyCNNCOSFIRE = mean(CNNCOSFIREpredictedLabelsTesting == datacnncosfire.testing.labels);
-% fprintf('Recognition Rate CNN + COSFIRE: %2.6f\n',accuracyCNNCOSFIRE);
+if (applysurf == 1)
+    fprintf('Recognition Rate CNN+COSFIRE+SURF: %2.6f\n',accuracyCNNCOSFIRE);
+else
+    fprintf('Recognition Rate CNN+COSFIRE: %2.6f\n',accuracyCNNCOSFIRE);
+end

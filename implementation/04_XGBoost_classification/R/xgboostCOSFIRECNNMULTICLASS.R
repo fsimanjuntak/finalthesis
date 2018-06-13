@@ -29,7 +29,7 @@ dtest <- xgb.DMatrix(data = COSFIRE_testing_X,label = COSFIRE_testing_Y)
 label = getinfo(dtest, "label")
 
 #multiclass
-num_class = 3
+num_class = 2
 bst <- xgboost(data = dtrain,
                 max_depth = 6, eta = 0.5, nrounds = 35, subsample = 0.5,
                 objective = "multi:softprob", num_class = num_class)
