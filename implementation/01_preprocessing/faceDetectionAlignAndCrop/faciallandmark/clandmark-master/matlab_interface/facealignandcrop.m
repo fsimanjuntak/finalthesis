@@ -13,13 +13,10 @@ addpath('./mex/');
 % addpath('./mex_single_precision/');
 
 addpath('./functions/');
-datasource = 'LFW'
-subdatasource = '\7433grayscalebalancedout\2345\'
+datasource = 'GENDER-FERET'
 displayImg = 0;
-input_path = strcat('C:\Users\Newbie\Desktop\FinalMasterThesis\implementasi\datasource\rawdata\',datasource,subdatasource);
-output_path = strcat('C:\Users\Newbie\Desktop\FinalMasterThesis\implementasi\datasource\processedrawdata\',datasource,subdatasource);
+input_path = strcat('C:\Users\Newbie\Desktop\FinalMasterThesis\finalthesis\implementation\datasource\rawdata\',datasource);
+output_path = strcat('C:\Users\Newbie\Desktop\FinalMasterThesis\finalthesis\implementation\datasource\processedrawdata\',datasource);
 alignDataset(input_path,output_path,displayImg)
-
-
 
 

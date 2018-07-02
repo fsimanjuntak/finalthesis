@@ -120,44 +120,49 @@ data.training.labels = [ones(1,size(dataset.training.males,3)),ones(1,size(datas
 data.testing.labels = [ones(1,size(dataset.testing.males,3)),ones(1,size(dataset.testing.females,3))*2];
 % Normalize training and test data
 data = normalizeData(data,numel(operatorlist));
+% Merge training and testing features for cross validation
 data.crossvalidation.desc = [data.training.desc;data.testing.desc];
 data.crossvalidation.labels = categorical([data.training.labels';data.testing.labels']);
 
-% Train and Validate COSFIRE
-SVMTemplate = templateSVM('KernelFunction', 'rbf',  'KernelScale', 'auto', 'BoxConstraint', 1, 'Standardize', 1);
-trainedCOSFIRESVMClassifier = fitcecoc(data.crossvalidation.desc,data.crossvalidation.labels); %, 'Learners', SVMTemplate, 'Coding', 'onevsone');
-%trainedClassifier = fitcsvm(data.crossvalidation.desc,data.crossvalidation.labels,'Standardize',true);
+%======================== COSFIRE ================================
+% Train and Validate COSFIRE with SVM ECOC 
+trainedCOSFIRESVMClassifier = fitcecoc(data.crossvalidation.desc,data.crossvalidation.labels);
+%trainedCOSFIRESVMClassifier = fitcsvm(data.crossvalidation.desc,data.crossvalidation.labels); %, 'Learners', SVMTemplate, 'Coding', 'onevsone');
 partModelCOSFIRESVM = crossval(trainedCOSFIRESVMClassifier, 'KFold', 5);
 AccuracyCOSFIRESVM = 1 - kfoldLoss(partModelCOSFIRESVM, 'LossFun', 'classiferror');
-fprintf('Recognition Rate COSFIRE: %2.6f\n',AccuracyCOSFIRESVM);
 [COSFIREValidationPredictions, COSFIRESVMScores] = kfoldPredict(partModelCOSFIRESVM);
-confmatCOSFIRESVM = confusionmat(data.crossvalidation.labels,COSFIREValidationPredictions);      
+confusionmat(data.crossvalidation.labels,COSFIREValidationPredictions); 
+fprintf('Recognition Rate COSFIRE: %2.6f\n',AccuracyCOSFIRESVM);
 
-% Train and Validate CNN VGGFace
-[CNNaccuracy,datacnn,CNNSVMScore] = extractCNNCROSSVALIDATIONFeatures(dirlist,CNNdir,numel(operatorlist));
-fprintf('Recognition Rate CNN: %2.6f\n',CNNaccuracy);
+%======================== CNN VGGFACE ================================
+% Extract and Validate VGGFace features
+[CNNaccuracy,datacnn,CNNSVMScore] = extractandvalidateVGGFeaturesCrossValidation(dirlist,CNNdir,numel(operatorlist));
 
+%========================Merge Features =============================
 % Merge CNN and COSFIRE features
 datacnncosfire.training.features = [datacnn.crossvalidation.normalizedfeatures';data.crossvalidation.desc'];
 datacnncosfire.training.features = datacnncosfire.training.features';
+% Merge CNN and COSFIRE scores
 datacnncosfire.training.scores = [CNNSVMScore';COSFIRESVMScores'];
 datacnncosfire.training.scores = datacnncosfire.training.scores';
 
-% Train and Validate Fusion of VGGFace and COSFIRE (Concatenated Technique)
+%======================== Concatenation Approach ==========================
+% Train and Validate Fusion of VGGFace and COSFIRE
 CNNCOSFIRESVM = fitcecoc(datacnncosfire.training.features,data.crossvalidation.labels);
+%CNNCOSFIRESVM = fitcsvm(datacnncosfire.training.features,data.crossvalidation.labels);
 partModelCNNCOSFIRESVM = crossval(CNNCOSFIRESVM, 'KFold', 5);
 AccuracyCNNCOSFIRESVM = 1 - kfoldLoss(partModelCNNCOSFIRESVM, 'LossFun', 'ClassifError');
-fprintf('Recognition Rate CNN+COSFIRE: %2.6f\n',AccuracyCNNCOSFIRESVM);
 [CNNCOSFIREvalidationPredictions, CNNCOSFIRESVMScore] = kfoldPredict(partModelCNNCOSFIRESVM);
-confmatCNNCOSFIRE = confusionmat(data.crossvalidation.labels,CNNCOSFIREvalidationPredictions);
+fprintf('Recognition Rate CNN+COSFIRE: %2.6f\n',AccuracyCNNCOSFIRESVM);
 
-% Train and Validate Fusion of VGGFace and COSFIRE (Stacked Technique)
+%======================== Stacking Approach ==========================
+% Train and Validate Fusion of VGGFace and COSFIRE
 CNNCOSFIRESVMStacked = fitcecoc(datacnncosfire.training.scores,data.crossvalidation.labels);
 partModelCNNCOSFIRESVMStacked = crossval(CNNCOSFIRESVMStacked, 'KFold', 5);
 AccuracyCNNCOSFIREStackedSVM = 1 - kfoldLoss(partModelCNNCOSFIRESVMStacked, 'LossFun', 'ClassifError');
-fprintf('Recognition Rate CNN+COSFIRE Stacked: %2.6f\n',AccuracyCNNCOSFIREStackedSVM);
 [CNNCOSFIREStackedvalidationPredictions, CNNCOSFIREStackedSVMScore] = kfoldPredict(partModelCNNCOSFIRESVMStacked);
-confmatCNNCOSFIREStacked = confusionmat(data.crossvalidation.labels,CNNCOSFIREStackedvalidationPredictions);
+fprintf('Recognition Rate CNN+COSFIRE Stacked: %2.6f\n',AccuracyCNNCOSFIREStackedSVM);
+
 
 % =====================  Write features to CSV =======================
 fusion.crossvalidation.labels = double(data.crossvalidation.labels);
@@ -169,7 +174,7 @@ csvwrite(strcat(CSVdir,'/crossvalidationlabels.csv'),fusion.crossvalidation.labe
 fusion.cosfire.crossvalidation.features = data.crossvalidation.desc;
 csvwrite(strcat(CSVdir,'/cosfirecrossvalidationfeatures.csv'),fusion.cosfire.crossvalidation.features);
 
-% %2.CNN
+%2.CNN
 fusion.cnn.crossvalidation.features = datacnn.crossvalidation.normalizedfeatures;
 csvwrite(strcat(CSVdir,'/cnncrossvalidationfeatures.csv'),fusion.cnn.crossvalidation.features);
 

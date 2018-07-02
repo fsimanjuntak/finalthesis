@@ -1,2 +1,0 @@
-/home/antonio/Desktop/COSFIRE/COSFIRE/COSFIRE_MatlabCode/clandmark-master/build/libclandmark/CMakeFiles/flandmark.dir
-/home/antonio/Desktop/COSFIRE/COSFIRE/COSFIRE_MatlabCode/clandmark-master/build/libclandmark/CMakeFiles/clandmark.dir

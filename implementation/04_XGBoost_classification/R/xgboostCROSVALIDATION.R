@@ -3,10 +3,10 @@ require(xgboost)
 
 rm(list=ls())
 
-source = "C:/Users/Newbie/Desktop/FinalMasterThesis/implementasi/datasource/processedrawdata/LFW/cnnsurf/LFW/results/csvfeatures"
+source = "C:/Users/Newbie/Desktop/FinalMasterThesis/finalthesis/implementation/datasource/processedrawdata/results/csvfeatures"
 
 #IDX_DATASET= 1 (COSFIRE), IDX_DATASET = 2 (CNN), IDX_DATASET = 3 (COSFIRE+CNN)
-IDX_DATASET = 2
+IDX_DATASET = 3
 arr_dataset_files = c('cosfirecrossvalidationfeatures.csv','cnncrossvalidationfeatures.csv','cnncosfirecrossvalidationfeatures.csv')
 
 
@@ -21,9 +21,18 @@ matrix_Y = as.matrix(dflabels)
 dtrain <-xgb.DMatrix(data = matrix_X, label= matrix_Y)
 
 #multiclass
-cv <- xgb.cv(data = dtrain, nfold = 5,
-             nrounds = 20, objective = "binary:logistic",
-             early_stopping_rounds = 3, maximize = FALSE)
+
+num_class = 2
+cv <- xgb.cv(data = dtrain, nfold = 5, nrounds =100, objective = "multi:softprob", num_class = num_class,
+              early_stopping_rounds = 3, maximize = FALSE)
+
+err = 0.012598+0.002721
+#cv <- xgb.cv(data = dtrain, nfold = 5,
+#             nrounds =60, objective = "binary:logistic",
+#             early_stopping_rounds = 3, maximize = FALSE)
 
 
 print(cv)
+print(paste("test-error=", err))
+print(paste("test-accuracy=", 1-err))
+

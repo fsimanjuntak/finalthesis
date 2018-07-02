@@ -1,4 +1,4 @@
-function [accuracy,datacnn,CNNTrainingScore,CNNTestingScore] = extractCNNFeatures(dirList,CNNdir,noperators)
+function [accuracy,datacnn,CNNTrainingScore,CNNTestingScore] = extractandvalidateVGGFeatures(dirList,CNNdir,noperators)
 % Load vggface training features
 load(strcat(CNNdir,'/vggfacefeatures.mat'));
 datacnn.training.features = vggfacefeatures.trainingFeatures;

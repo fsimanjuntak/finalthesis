@@ -1,4 +1,4 @@
-function [accuracy,datacnn,SVMCNNScore] = extractCNNCROSSVALIDATIONFeatures(dirList,CNNdir,noperators)
+function [accuracy,datacnn,SVMCNNScore] = extractandvalidateVGGFeaturesCrossValidation(dirList,CNNdir,noperators)
 % Load vggface training features
 load(strcat(CNNdir,'/vggfacefeatures.mat'));
 datacnn.training.features = vggfacefeatures.trainingFeatures;
@@ -18,9 +18,9 @@ datacnn.crossvalidation.normalizedfeatures  = [datacnn.training.normalizedfeatur
 datacnn.crossvalidation.labels = [datacnn.training.labels;datacnn.testing.labels];
 
 % Train SVM
-template = templateSVM('KernelFunction', 'rbf',  'KernelScale', 'auto', 'BoxConstraint', 1, 'Standardize', 1);
-%SVMCNNClassifier = fitcecoc(datacnn.crossvalidation.normalizedfeatures,datacnn.crossvalidation.labels); %, 'Learners', template, 'Coding', 'onevsone');
-SVMCNNClassifier = fitcsvm(datacnn.crossvalidation.normalizedfeatures,datacnn.crossvalidation.labels); %, 'Learners', template, 'Coding', 'onevsone');
+SVMCNNClassifier = fitcecoc(datacnn.crossvalidation.normalizedfeatures,datacnn.crossvalidation.labels);
+%template = templateSVM('KernelFunction', 'rbf',  'KernelScale', 'auto', 'BoxConstraint', 1, 'Standardize', 1);
+%SVMCNNClassifier = fitcsvm(datacnn.crossvalidation.normalizedfeatures,datacnn.crossvalidation.labels); %, 'Learners', template, 'Coding', 'onevsone');
 %SVMCNNClassifier = fitcsvm(datacnn.crossvalidation.features,datacnn.crossvalidation.labels,'Standardize',true,'ClassNames',{'1','2'});
 partModel = crossval(SVMCNNClassifier, 'KFold', 5);
 accuracy = 1 - kfoldLoss(partModel, 'LossFun', 'ClassifError');

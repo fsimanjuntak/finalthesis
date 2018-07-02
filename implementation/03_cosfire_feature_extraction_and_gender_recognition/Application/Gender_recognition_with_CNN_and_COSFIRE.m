@@ -112,7 +112,6 @@ operatorlist = getCOSFIREoperators(outdir,dataset,noperatorspergender);
 % viewCOSFIREstructure(operatorlist{1,1});
 % viewCOSFIREstructure(operatorlist{1,2});
 
-
 % Get training and test descriptors. If the descriptors are already available, 
 % they are loaded from the file 'COSFIREdescriptor.mat'.
 [data.training.desc,data.testing.desc] = getCOSFIREdescriptors(outdir,dataset,operatorlist);
@@ -124,81 +123,77 @@ data.testing.labels = [ones(1,size(dataset.testing.males,3)),ones(1,size(dataset
 % Normalize training and test data
 data = normalizeData(data,numel(operatorlist));
 
-%======================== SVM models with Chi-Squared Kernel ============
-% % Training classification SVM models with Chi-Squared Kernel
-% [model.pyramid, kernel.training] = trainCOSFIREPyramidModel(outdir,data,numel(operatorlist));
-% %Evaluate test data with SVM models
-% [result.info, kernel.testing, result.svmscore] = testCOSFIREPyramidModel(outdir,data,numel(operatorlist),model.pyramid);
-% fprintf('Recognition Rate COSFIRE: %2.6f\n',result.info.CorrectRate);
-
-% =============== Train and Validate COSFIRE with SVM ECOC =============
+%======================== COSFIRE ================================
+% Train and Validate COSFIRE with SVM ECOC 
 data.training.labels = categorical(data.training.labels');
 data.testing.labels = categorical(data.testing.labels');
-
 trainedCOSFIRESVMClassifier = fitcecoc(data.training.desc,data.training.labels);
+%trainedCOSFIRESVMClassifier = fitcsvm(data.training.desc,data.training.labels);
 [~,COSFIRESVMTrainingScore] = predict(trainedCOSFIRESVMClassifier,data.training.desc);
 [predictedCOSFIRELabels,COSFIRESVMTestingScore] = predict(trainedCOSFIRESVMClassifier,data.testing.desc);
 accuracyCOSFIRE = mean(predictedCOSFIRELabels == data.testing.labels);
 fprintf('Recognition Rate COSFIRE: %2.6f\n',accuracyCOSFIRE);
 
-% Train and Validate CNN VGGFace
-[CNNaccuracy,datacnn,CNNSVMTrainingScore,CNNSVMTestingScore] = extractCNNFeatures(dirlist,CNNdir,numel(operatorlist));
-fprintf('Recognition Rate CNN: %2.6f\n',CNNaccuracy);
+%======================== CNN VGGFACE ================================
+% Extract and Validate VGGFace features
+[CNNaccuracy,datacnn,CNNSVMTrainingScore,CNNSVMTestingScore] = extractandvalidateVGGFeatures(dirlist,CNNdir,numel(operatorlist));
 
 % Merge CNN and COSFIRE features
 datacnncosfire.training.features = [datacnn.training.normalizedfeatures';data.training.desc'];
 datacnncosfire.training.features = datacnncosfire.training.features';
 datacnncosfire.training.labels = datacnn.training.labels;
-
 datacnncosfire.testing.features = [datacnn.testing.normalizedfeatures';data.testing.desc'];
 datacnncosfire.testing.features = datacnncosfire.testing.features';
 datacnncosfire.testing.labels = datacnn.testing.labels;
 
+% Merge CNN and COSFIRE scores
 datacnncosfire.training.scores = [CNNSVMTrainingScore COSFIRESVMTrainingScore];
 datacnncosfire.testing.scores = [CNNSVMTestingScore COSFIRESVMTestingScore];
 
-% Train and Validate Fusion of VGGFace and COSFIRE (Concatenated Technique)
+%======================== Concatenation Approach ==========================
+% Train and Validate Fusion of VGGFace and COSFIRE
 trainedCNNCOSFIRESVMClassifier = fitcecoc(datacnncosfire.training.features,datacnncosfire.training.labels);
+%trainedCNNCOSFIRESVMClassifier = fitcsvm(datacnncosfire.training.features,datacnncosfire.training.labels);
 predictedCNNCSOFIRELabels = predict(trainedCNNCOSFIRESVMClassifier,datacnncosfire.testing.features);
 accuracyCNNCOSFIRE = mean(predictedCNNCSOFIRELabels == datacnncosfire.testing.labels);
 fprintf('Recognition Rate Concatenation CNN+ COSFIRE: %2.6f\n',accuracyCNNCOSFIRE);
 
-% Train and Validate Fusion of VGGFace and COSFIRE (Stacked Technique)
+%======================== Stacking Approach ==========================
+% Train and Validate Fusion of VGGFace and COSFIRE
 trainedStackedCNNCOSFIRESVMClassifier = fitcecoc(datacnncosfire.training.scores,datacnncosfire.training.labels);
+%trainedStackedCNNCOSFIRESVMClassifier = fitcsvm(datacnncosfire.training.scores,datacnncosfire.training.labels);
 predictedStackedCNNCSOFIRELabels = predict(trainedStackedCNNCOSFIRESVMClassifier,datacnncosfire.testing.scores);
 accuracyStackedCNNCOSFIRE = mean(predictedStackedCNNCSOFIRELabels == datacnncosfire.testing.labels);
 fprintf('Recognition Rate Stacked CNN+COSFIRE: %2.6f\n',accuracyStackedCNNCOSFIRE);
 
 
 % %Write features to CSV
-% % fusion.training.labels = data.training.labels';
-% % fusion.testing.labels = data.testing.labels';
-% fusion.training.labels = double(datacnn.training.labels);
-% fusion.testing.labels = double(datacnn.testing.labels);
-% fusion.training.labels(fusion.training.labels==1)=0;
-% fusion.training.labels(fusion.training.labels==2)=1;
-% fusion.testing.labels(fusion.testing.labels==1)=0;
-% fusion.testing.labels(fusion.testing.labels==2)=1;
-% 
-% csvwrite(strcat(CSVdir,'/trainingcosfirelabels.csv'),fusion.training.labels);
-% csvwrite(strcat(CSVdir,'/testingcosfirelabels.csv'),fusion.testing.labels);
-% 
-% %1.COSFIRE
-% fusion.cosfire.training.features = data.training.desc;
-% fusion.cosfire.testing.features = data.testing.desc;
-% csvwrite(strcat(CSVdir,'/cosfiretrainingfeatures.csv'),fusion.cosfire.training.features);
-% csvwrite(strcat(CSVdir,'/cosfiretestingfeatures.csv'),fusion.cosfire.testing.features);
-% 
-% %2.CNN
-% fusion.cnn.training.features = datacnn.training.normalizedfeatures;
-% fusion.cnn.testing.features = datacnn.testing.normalizedfeatures;
-% csvwrite(strcat(CSVdir,'/cnntrainingfeatures.csv'),fusion.cnn.training.features);
-% csvwrite(strcat(CSVdir,'/cnntestingfeatures.csv'),fusion.cnn.testing.features);
-% 
-% %3.CNN+COSFIRE
-% fusion.cnncosfire.training.features = datacnncosfire.training.normalizedfeatures;
-% fusion.cnncosfire.testing.features = datacnncosfire.testing.normalizedfeatures;
-% csvwrite(strcat(CSVdir,'/cnncosfiretrainingfeatures.csv'),fusion.cnncosfire.training.features);
-% csvwrite(strcat(CSVdir,'/cnncosfiretestingfeatures.csv'),fusion.cnncosfire.testing.features);
+fusion.training.labels = double(data.training.labels);
+fusion.testing.labels = double(data.testing.labels);
+fusion.training.labels(fusion.training.labels==1)=0;
+fusion.training.labels(fusion.training.labels==2)=1;
+fusion.testing.labels(fusion.testing.labels==1)=0;
+fusion.testing.labels(fusion.testing.labels==2)=1;
+
+csvwrite(strcat(CSVdir,'/trainingcosfirelabels.csv'),fusion.training.labels);
+csvwrite(strcat(CSVdir,'/testingcosfirelabels.csv'),fusion.testing.labels);
+
+%1.COSFIRE
+fusion.cosfire.training.features = data.training.desc;
+fusion.cosfire.testing.features = data.testing.desc;
+csvwrite(strcat(CSVdir,'/cosfiretrainingfeatures.csv'),fusion.cosfire.training.features);
+csvwrite(strcat(CSVdir,'/cosfiretestingfeatures.csv'),fusion.cosfire.testing.features);
+
+%2.CNN
+fusion.cnn.training.features = datacnn.training.normalizedfeatures;
+fusion.cnn.testing.features = datacnn.testing.normalizedfeatures;
+csvwrite(strcat(CSVdir,'/cnntrainingfeatures.csv'),fusion.cnn.training.features);
+csvwrite(strcat(CSVdir,'/cnntestingfeatures.csv'),fusion.cnn.testing.features);
+
+%3.CNN+COSFIRE
+fusion.cnncosfire.training.features = datacnncosfire.training.features;
+fusion.cnncosfire.testing.features = datacnncosfire.testing.features;
+csvwrite(strcat(CSVdir,'/cnncosfiretrainingfeatures.csv'),fusion.cnncosfire.training.features);
+csvwrite(strcat(CSVdir,'/cnncosfiretestingfeatures.csv'),fusion.cnncosfire.testing.features);
 
 
